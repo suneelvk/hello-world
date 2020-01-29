@@ -75,3 +75,38 @@
 			System.out.println(e.getMessage());
 		}
 	}
+
+public static void kleovSetup() {
+		System.out.println(System.getProperty("EnableKlovReport"));
+		if (System.getProperty("EnableKlovReport") != null && System.getProperty("EnableKlovReport").equals("true")) {
+			ExtentProperties extentProperties = ExtentProperties.INSTANCE;
+			extentProperties.setKlovServerUrl(System.getProperty("KlovServerUrl"));
+			// specify project
+			// ! you must specify a project, other a "Default project will be used"
+			extentProperties.setKlovProjectName(System.getProperty("KlovProjectName"));
+			// you must specify a reportName otherwise a default timestamp will be used
+			extentProperties.setKlovReportName(System.getProperty("KlovReportName"));
+
+			// Mongo DB Configuration
+			extentProperties.setMongodbHost(System.getProperty("MongodbHost"));
+
+			int global_mongodbPort;
+			try {
+				global_mongodbPort = Integer.valueOf(System.getProperty("MongodbPort"));
+
+			} catch (NumberFormatException e) {
+				System.out.println("Error getting the 'global_mongodbPort' from properties.");
+				global_mongodbPort = 27017; // default port
+			}
+			extentProperties.setMongodbPort(global_mongodbPort);
+			// extentProperties.setMongodbPort("27017");
+			extentProperties.setMongodbDatabase(System.getProperty("MongodbDatabase"));
+
+			// If mongo Db is running in Authentication mode provide username and password
+			if (System.getProperty("MongodbUsername") != null && !System.getProperty("MongodbUsername").equals("")) {
+				extentProperties.setMongodbUsername(System.getProperty("MongodbUsername"));
+				extentProperties.setMongodbPassword(System.getProperty("MongodbPassword"));
+			}
+
+		}
+	}
