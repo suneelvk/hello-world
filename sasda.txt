@@ -1,0 +1,2 @@
+maven goals
+clean deploy
