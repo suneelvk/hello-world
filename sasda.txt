@@ -110,3 +110,493 @@ public static void kleovSetup() {
 
 		}
 	}
+
+
+Maven Pom.xml
+YAML
+
+steps:
+- task: Maven@3
+  displayName: 'Maven pom.xml'
+  inputs:
+    mavenPomFile: '$(Parameters.mavenPOMFile)'
+    goals: 'deploy -Dbuildversion=$(Build.BuildNumber)'
+    options: '--settings ./maven/settings.xml'
+    publishJUnitResults: false
+steps:
+- task: CopyFiles@2
+  displayName: 'Copy Files to: $(build.artifactstagingdirectory)'
+  inputs:
+    SourceFolder: '$(system.defaultworkingdirectory)'
+    Contents: '**/*.jar'
+    TargetFolder: '$(build.artifactstagingdirectory)'
+steps:
+- task: PublishBuildArtifacts@1
+  displayName: 'Publish Artifact: drop'
+  inputs:
+    PathtoPublish: '$(build.artifactstagingdirectory)'
+
+
+
+'''classical view steps
+MAVEN
+	displayName: 'Maven pom.xml'
+	mavenPomFile: pom.xml
+	goals: deploy -Dbuildversion=$(Build.BuildNumber)
+	options: --settings ./maven/settings.xml
+COPYFILESTO $(build.artifactstagingdirectory)
+	displayName: Copy Files to: $(build.artifactstagingdirectory)
+	Source Folder: $(system.defaultworkingdirectory)
+	Contents :**/*.jar
+	Target Folder : $(build.artifactstagingdirectory)
+PUBLISH ARTIFACT: 
+	Display name *: Publish Artifact: drop
+	Path to publish * *: $(build.artifactstagingdirectory)
+        Artfact Name: drop
+
+
+
+'--------------------
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory = $true)][ValidateNotNull()][string]$PersonalAccessToken1,
+    [Parameter(Mandatory = $true)][ValidateNotNull()][string]$AzureFoundationCollectionUri1,
+    [Parameter(Mandatory = $true)][ValidateNotNull()][string]$TeamProject1,
+    [Parameter(Mandatory = $true)][ValidateNotNull()][string]$Repositories_Name1,
+    $user = ""
+)
+
+    $PersonalAccessToken = $PersonalAccessToken1
+    $AzureFoundationCollectionUri = $AzureFoundationCollectionUri1
+    $TeamProject = $TeamProject1
+    $Repositories_Name = $Repositories_Name1
+
+
+$StrWiTypeName = "Test Case"
+
+Write-Host "TeamFoundationCollectionUri : $AzureFoundationCollectionUri"
+Write-Host "TeamProject                 : $TeamProject"
+Write-Host "Repositories_Name           : $Repositories_Name1"
+
+# Base64-encodes the Personal Access Token (PAT) appropriately
+$base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f $user, $PersonalAccessToken)))
+
+$baseUrl = "$AzureFoundationCollectionUri/$TeamProject/_apis"
+
+$Repositories_Url = "$baseUrl/git/repositories?api-version=5.0"
+
+$Repositories_Response = Invoke-RestMethod -Method Get -ContentType application/json -Uri $Repositories_Url -Headers @{Authorization = ("Basic {0}" -f $base64authinfo) }
+
+if(!($Repositories_Response.value.name.Contains($Repositories_Name))){ throw "ERROR!! : " + $Repositories_Name + " is invalid. Please provide valid repository name!!"}
+
+$Find_ObjectId_Url = "$baseUrl/git/repositories/$Repositories_Name/items?api-version=5.1"
+    
+$Repositories_Response_ObjectId = Invoke-RestMethod -Method Get -ContentType application/json -Uri $Find_ObjectId_Url -Headers @{Authorization = ("Basic {0}" -f $base64authinfo) }
+    
+$Store_ObjectId = $Repositories_Response_ObjectId.value.objectId
+     
+$Store_TreeID_Url = "$baseUrl/git/repositories/$Repositories_Name/trees/$Store_ObjectId"
+    
+$Store_TreeID1_Url = "?recursive=true&api-version=5.1"
+    
+$Find_Find_All_TreeNode_Url = "$Store_TreeID_Url$Store_TreeID1_Url"
+    
+$Repositories_Response_Find_All_TreeNode = Invoke-RestMethod -Method Get -ContentType application/json -Uri $Find_Find_All_TreeNode_Url -Headers @{Authorization = ("Basic {0}" -f $base64authinfo) }
+    
+$Store_TreeNode_Total_Count = $Repositories_Response_Find_All_TreeNode.treeEntries.Count
+      
+$array_of_Feature_FileName = @()
+$array_of_Feature_Tree_Name = @()
+
+for ($STNTC = 0; $STNTC -le $Store_TreeNode_Total_Count ; $STNTC++) {
+    #$Repositories_TreeNode_Name = $Repositories_Response_Find_All_TreeNode.treeEntries.relativePath[$STNTC]
+    if ($Repositories_Response_Find_All_TreeNode.treeEntries.relativePath[$STNTC] -match "feature") {
+        $array_of_Feature_Tree_Name += $Repositories_Response_Find_All_TreeNode.treeEntries[$STNTC]
+    }
+}
+
+$Store_Feature_Tree_Name_Url = $array_of_Feature_Tree_Name[0].url
+
+$Repositories_Response_Find_All_Feature_File = Invoke-RestMethod -Method Get -ContentType application/json -Uri $Store_Feature_Tree_Name_Url -Headers @{Authorization = ("Basic {0}" -f $base64authinfo) }
+    
+$Store_FeatureFile_Total_Count = $Repositories_Response_Find_All_Feature_File.treeEntries.Count
+
+for ($SFFTC = 0; $SFFTC -le $Store_FeatureFile_Total_Count ; $SFFTC++) {
+    #$Feature_FileName = $Repositories_Response_Find_All_Feature_File.treeEntries.relativePath[$SFFTC]
+    if ($Repositories_Response_Find_All_Feature_File.treeEntries.relativePath[$SFFTC] -notmatch ".feature.cs") {
+        $array_of_Feature_FileName += $Repositories_Response_Find_All_Feature_File.treeEntries[$SFFTC]
+    }
+}
+
+
+$Feature_FileName_Total_Count = $array_of_Feature_FileName.Count -2 
+      
+for ($FFN = 0; $FFN -le $Feature_FileName_Total_Count ; $FFN++) {
+
+    if($array_of_Feature_FileName[$FFN] -ne $null){
+
+        If ($array_of_Feature_FileName[$FFN].url.StartsWith('https://')) {
+            $Feature_objectIdUrl = $array_of_Feature_FileName[$FFN].url
+        }
+        else {
+            $Feature_objectIdUrl = $array_of_Feature_FileName.url
+        }
+    }   
+
+   # Invoke Azure-API to get feature file
+    $responseFromGet_FeatureFile = Invoke-RestMethod -Method Get -ContentType application/json -Uri $Feature_objectIdUrl  -Headers @{Authorization = ("Basic {0}" -f $base64authinfo) }
+
+    #Store Feature Data
+    $Str = $responseFromGet_FeatureFile
+
+    #Array
+    $array_of_Feature_TagName = @()
+    $array_of_Feature_TagName_Count = @()
+
+    #Find Feature Tag
+    try {
+        $Feature_Tag_Pos1 = $Str.IndexOf("Feature:")
+        $Feature_Tag_Str = $Str.Substring(0, $Feature_Tag_Pos1)
+    }
+    catch {
+        Write-Host "Error Message :Feature Tags are missing in Feature File" -ForegroundColor Red
+        $Feature_TagName = ""
+    }
+
+    $array_of_Feature_TagName += $Feature_Tag_Str.Split([Environment]::NewLine)
+
+    #Count Split String
+    $Split_Feature_TagName_Count = $array_of_Feature_TagName.Count - 1
+  for ($SFT = 0; $SFT -le $Split_Feature_TagName_Count ; $SFT++) {
+
+        if ($array_of_Feature_TagName[$SFT].StartsWith('@')) {
+            $array_of_Feature_TagName_Count = $SFT
+            $Feature_TagName = $array_of_Feature_TagName[$array_of_Feature_TagName_Count]
+            break
+        }
+        elseif ($array_of_Feature_TagName[$SFT].StartsWith('﻿')) {
+            try {
+                $array_of_Feature_TagName_Count = $SFT
+                $Feature_TagName_Str = $array_of_Feature_TagName[$array_of_Feature_TagName_Count]
+                $Feature_Tag_Pos = $Feature_TagName_Str.IndexOf("@")
+                $Feature_TagName = $Feature_TagName_Str.Remove(0, $Feature_Tag_Pos)
+                break
+            }
+            catch {
+                Write-Host "Error Message :Feature Tags are missing in Feature File" -ForegroundColor Red
+                $Feature_TagName = ""
+            }
+        }
+    }
+
+  # Find Feature content
+    [regex]$regex = 'Feature:'
+    $Feature_Index = $regex.matches($Str).Index[0]
+
+    # Remove Feature content
+    $Feature_RightPart = $Str.Remove(0, $Feature_Index)
+
+    # Find @ 1st
+    [regex]$regex = '@'
+    $Hash_Feature_Index = $regex.matches($Feature_RightPart).Index[0]
+
+    # Without feature String
+    $Tag_RightPart = $Feature_RightPart.Remove(0, $Hash_Feature_Index)
+
+    #creating array that holds all @/ Split
+    $array_of_Split_String_File = @()
+
+    $array_of_Scenario_TagName_Count = @()
+    #Split String
+
+    $array_of_Split_String_File += $Tag_RightPart.Split([Environment]::NewLine)
+    $array_of_Split_String_File = $array_of_Split_String_File.trimstart()
+
+    #Count Split String
+    $Split_String_Total_Count = $array_of_Split_String_File.Count
+    $Split_String_Total_Count = $Split_String_Total_Count - 1
+
+
+ for ($SST = 0; $SST -le $Split_String_Total_Count ; $SST++) {
+        if ($array_of_Split_String_File[$SST].StartsWith('@')) {
+            $array_of_Scenario_TagName_Count += $SST
+        }#Split_String_Index
+    }#Split_String_Total_Count
+
+    $TagName_Count = $array_of_Scenario_TagName_Count.Count
+    $TagName_Count = $TagName_Count - 1
+
+    #creating array that holds all objects
+    $array_of_Scenario = @()
+    $array_of_Scenario1 = @()
+    
+    $array_of_Split_Scenario1_Join_File = @()
+    $array_of_Scenario_Title_Count = @()
+
+
+ for ($TC = 0 ; $TC -le $TagName_Count; $TC++ ) {
+        $TNC = $TC
+        $TNC1 = $TNC + 1
+        $version = $array_of_Scenario_TagName_Count[$TNC1]
+
+        if ([string]::IsNullOrEmpty($version)) {
+            $Scenario_TagName_Number = $array_of_Scenario_TagName_Count[$TC]
+            $Scenario_TagName = $array_of_Split_String_File[$Scenario_TagName_Number]
+            $TNC1 = $Scenario_TagName_Number + 1
+            $TNC2 = $Split_String_Total_Count
+            $TNC4 = $TNC2
+        }
+        else {
+            $Scenario_TagName_Number = $array_of_Scenario_TagName_Count[$TC]
+            $Scenario_TagName = $array_of_Split_String_File[$Scenario_TagName_Number]
+
+            $TNC2 = $array_of_Scenario_TagName_Count[$TNC1]
+            $TNC4 = $TNC2 - 1
+        }
+
+        For ($TNC3 = $TNC1 ; $TNC3 -le $TNC4; $TNC3++) {
+            $array_of_Scenario += $array_of_Split_String_File[$TNC3] -join [Environment]::NewLine
+        }
+
+        $Scenario_Total_Count = $array_of_Scenario.Count - 1
+
+        For ($STC = 0; $STC -le $Scenario_Total_Count; $STC++ ) {
+            $array_of_Split_Scenario1_Join_File = $array_of_Scenario[$STC]
+            if ($array_of_Split_Scenario1_Join_File.StartsWith('Scenario:')) {
+                $array_of_Scenario_Title_Count += $STC
+            }
+            elseif ($array_of_Split_Scenario1_Join_File.StartsWith('Scenario Outline:')) {
+                $array_of_Scenario_Title_Count += $STC
+            }
+        }#$STC
+
+        $Scenario_Count = $array_of_Scenario_Title_Count.Count
+        $Scenario_Count = $Scenario_Count - 1
+
+        ############################
+
+    $array_of_Step = @()
+        $array_of_Step1 = @()        
+
+        for ($SC = 0 ; $SC -le $Scenario_Count; $SC++ ) {
+
+            $SNC = $SC
+            $SNC1 = $SNC + 1
+            $Sversion = $array_of_Scenario_Title_Count[$SNC1]
+
+            $Scenario_Title_Number = $array_of_Scenario_Title_Count[$SC]
+            $step_Title = $array_of_Scenario[$Scenario_Title_Number]
+            $SNC5 = $array_of_Scenario_Title_Count[$SC]
+
+            if ([string]::IsNullOrEmpty($Sversion)) {
+                                
+                $SNC1 = $Scenario_Title_Number + 1
+                $SNC2 = $Split_String_Total_Count                
+                $SNC4 = $SNC2
+            }
+            else {                
+                $SNC2 = $array_of_Scenario_Title_Count[$SNC1]
+                $SNC4 = $SNC2 - 1
+            }
+
+            For ($SNC3 = $SNC5 ; $SNC3 -le $SNC4; $SNC3++) {
+                $array_of_Step += $array_of_Scenario[$SNC3] -join [Environment]::NewLine
+            }
+
+   ######################################################################################################
+            # Test Case
+            #######################################################################################################
+                  
+          $StrTitle = $step_Title
+
+
+            #Add Title
+            $StrVstsAccountUrl = $baseUrl
+
+            # Build request body
+            $JsnBody = "[`
+        {`
+            `"op`": `"add`",
+            `"path`": `"/fields/System.Title`",
+            `
+            `"value`": `"$StrTitle`",
+            
+        }
+    ]"
+
+            # Create new Vsts Work Item
+            $StrUri = "$StrVstsAccountUrl/wit/workitems/`$$StrWiTypeName" + "?api-version=1.0"
+
+            $JsnResponse = Invoke-RestMethod -Uri $StrUri -Headers @{Authorization = ("Basic {0}" -f $base64authinfo) } -Method Patch -ContentType application/json-patch+json -Body $JsnBody   
+            
+            
+            
+            #Add Tags
+            $IntWorkItemId1 = "@" + "" + $JsnResponse.id
+            $IntWorkItemId = $JsnResponse.id
+            [String]$StrTag = $Feature_TagName + "," + $Scenario_TagName + "," + $IntWorkItemId1
+            
+            $array_of_StepName_Sentence = @()
+            $array_of_StepName_Array =@()
+            ########
+            $Scenario_Total_Step_Join_Count = $array_of_Step.Count
+            $Scenario_Total_Step_Join_Count = $Scenario_Total_Step_Join_Count -1
+            
+           For($STSJC =1 ;$STSJC -le $Scenario_Total_Step_Join_Count; $STSJC++){
+            if ($array_of_Step[$STSJC ].StartsWith('Given')) {
+                $array_of_StepName_Sentence += $STSJC
+            }
+            elseif ($array_of_Step[$STSJC ].StartsWith('Then')) {
+                $array_of_StepName_Sentence  += $STSJC
+            }elseif ($array_of_Step[$STSJC ].StartsWith('And')) {
+                $array_of_StepName_Sentence  += $STSJC
+            }elseif ($array_of_Step[$STSJC ].StartsWith('When')) {
+                $array_of_StepName_Sentence  += $STSJC
+            }
+            }#STSJC
+
+     ### Join String            
+            $TSTC1 = 0
+            [System.Collections.ArrayList]$ArrayList = $array_of_StepName_Array
+           # $Test_String_Total_Count1 = $array_of_StepName_Sentence.Count
+            $StepName_Sentence_Total_Count =$array_of_Step.Count
+            For($TSTC =1; $TSTC-le $StepName_Sentence_Total_Count; $TSTC++){
+            $versionTC = $array_of_Step[$TSTC]
+            if($array_of_StepName_Sentence[$TSTC1] -eq$TSTC){
+            $StepName_Store = $array_of_Step[$TSTC]
+            $AL=$ArrayList.Add($StepName_Store)
+            $TSTC1 = $TSTC1 + 1
+            }elseif([string]::IsNullOrEmpty($versionTC)){
+            }
+           else{
+            $TestTC_Count = $ArrayList.Count
+            $TestTC_Count = $TestTC_Count-1
+            $StepName_Store_Join = $ArrayList[$TestTC_Count] + " `r`n" + $array_of_Step[$TSTC]
+            $StepName_Store1 =,$StepName_Store_Join
+            $AL= $ArrayList.Add("$StepName_Store1")
+           $ArrayList_Count_Total = $ArrayList.Count
+           $ArrayList_Count_Total = $ArrayList_Count_Total -2
+          # $ArrayList.RemoveAt($ArrayList_Count_Total)
+          try{  
+          $ArrayList.RemoveAt($ArrayList_Count_Total)
+          }Catch{
+          }
+            }
+            }
+
+
+
+
+            $Scenario_Total_Step_Count = $ArrayList.Count
+            $array_of_StepName = @()         
+
+            for ($TS = 0; $TS -le $Scenario_Total_Step_Count; $TS++) {
+      
+                $step_id1 = $TS
+                $step_id = $step_id1 + 1
+                $step_Name1 = $ArrayList[$TS]
+               
+                $versionSN = $step_Name1
+
+                if ([string]::IsNullOrEmpty($versionSN)) {  
+                    $step_Name = " "
+                }
+                elseif ($step_Name1.Contains('"')) {               
+                    $step_Name1 = $step_Name1.Replace('"', '\"')
+                    $step_Name = $step_Name1     
+                }
+                elseif ($step_Name1.Contains('<')) {
+                    $step_Name1 = $step_Name1.Replace("<", "{")
+                    $step_Name1 = $step_Name1.Replace(">", "}")
+                    $step_Name = $step_Name1
+                }
+                else {
+                    $step_Name = $step_Name1
+                }
+
+                $array_of_StepName += "<step id='$step_id' type='ActionStep'><parameterizedString isformatted='true'>$step_Name</parameterizedString>
+<parameterizedString isformatted='true'></parameterizedString><description></description></step>"
+            }
+
+        $StepFirst = "<steps id='0' last='$TS'>"
+            $StepLast = "</steps>"
+            $Step = $StepFirst + "" + $array_of_StepName + "" + $StepLast
+            $AssignedTo = "" 
+            $JsnBodyStep = "[`
+        {`
+            `"op`": `"add`",
+            `"path`": `"/fields/Microsoft.VSTS.TCM.Steps`",`
+            `"value`": `"$Step`",   
+        },
+        {`
+            `"op`": `"add`",
+            `"path`": `"/fields/System.AssignedTo`",`
+            `"value`": `"$AssignedTo`",   
+        },
+        {`
+            `"op`": `"add`",
+            `"path`": `"/fields/System.Tags`",
+            `
+            `"value`": `"$StrTag`",
+            
+        }
+    $BodyStep = $JsnBodyStep | ConvertTo-Json | ConvertFrom-Json           
+            $uploadAttachmentUri1 = "$StrVstsAccountUrl/wit/workitems/$IntWorkItemId" + "?api-version=1.0"   
+            $JsnResponseTag = Invoke-RestMethod  -Uri $uploadAttachmentUri1 -Headers @{Authorization = ("Basic {0}" -f $base64authinfo) } -Method Patch -ContentType application/json-patch+json -Body $BodyStep
+            
+            if($JsnResponseTag -ne $null){
+                $out_content = "New workItem Created with Id: "+ $JsnResponseTag.id
+                Write-Host  "New workItem Created with Id :  $IntWorkItemId"
+                Write-Host  "New Test Case With TagName   :  $StrTag"              
+              $Id = $JsnResponseTag.id
+              $Fields = @('System.Id', 'System.Title', 'System.AssignedTo',   
+                    'System.State', 'System.CreatedBy', 'System.WorkItemType', 'System.Tags') -join ","
+            
+            $TestCaseId_Uri = "$AzureFoundationCollectionUri/$TeamProject/_apis/wit/WorkItems?ids=$Id&fields=$Fields&api-version=1"
+            
+            $Repositories_Response_TestCaseId = Invoke-RestMethod -Method Get -ContentType application/json -Uri $TestCaseId_Uri -Headers @{Authorization = ("Basic {0}" -f $base64authinfo) }
+            #$path = "C:\agent\_work\1\s\Test Case\TestCaseId-$((get-date).tostring('dd-MM-yyyy')).csv"
+            $path = "\TestCaseId-$((get-date).tostring('dd-MM-yyyy')).csv"
+            $Repositories_Response_TestCaseId.value.fields | Export-Csv -Path $path -NoTypeInformation -Append
+            }
+
+            $array_of_Step = $array_of_Step1
+            $Step = " "             
+        }#SC
+        $array_of_Scenario_Title_Count = $array_of_Step1
+        $array_of_Scenario = $array_of_Scenario1
+    }#TC
+    $Feature_TagName = ""
+}#Feature_FileName_Total_Count
+
+$oldfile = $path
+$newfile = $path
+
+$text = (Get-Content -Path $oldfile -ReadCount 0) -join "`n"
+$text -replace 'System.', ' ' | Set-Content -Path $newfile
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
