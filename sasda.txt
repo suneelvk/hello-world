@@ -1,0 +1,77 @@
+@After(order = 1)
+	public void afterScenario(Scenario scenario) {
+		try {
+			if (TestBase.execVia == null || TestBase.execVia.isEmpty()) {
+
+			} else if (scenario.isFailed()) {
+				String screenshotName = scenario.getName().replaceAll(" ", "_");
+				try {
+
+					// Reporter.addScenarioLog(TestBase.requestWriter.toString());
+					Reporter.addStepLog("DETAILED LOG:");
+					Reporter.addStepLog("Request details:   ------------------------------------------------");
+					Reporter.addStepLog(TestBase.requestWriter.toString());
+					Reporter.addStepLog("Response details:   ------------------------------------------------");
+					Reporter.addStepLog(TestBase.responseWriter.toString());
+
+					if (!TestBase.global_environment.equals("api")) {
+						// This takes a screenshot from the driver at save it to the specified location
+						// File sourcePath = ((TakesScreenshot)
+						// testContext.getWebDriverManager().getDriver()).getScreenshotAs(OutputType.FILE);
+						File sourcePath = null;
+
+						if (TestBase.global_environment.contains("mobile")) {
+							if (TestBase.global_mobileRunOn.contains("WEBSITE")) {
+								sourcePath = ((TakesScreenshot) TestBase.driver).getScreenshotAs(OutputType.FILE);
+							} else {
+								sourcePath = ((TakesScreenshot) TestBase.appiumDriver).getScreenshotAs(OutputType.FILE);
+							}
+						}
+
+						else {
+							try {
+								sourcePath = ((TakesScreenshot) TestBase.driver).getScreenshotAs(OutputType.FILE);
+							} catch (UnhandledAlertException  e) {
+								//TestBase.driver.switchTo().alert().accept();
+								//sourcePath = //Long.toString((((long)(Math.random() * 50352534 +1))*((long)(Math.random() * 50352534 +1))*10687));
+								
+								sourcePath = File.createTempFile("temp-file-name", ".png"); 
+								BufferedImage image = new Robot().createScreenCapture(new Rectangle(Toolkit.getDefaultToolkit().getScreenSize()));
+								ImageIO.write(image, "png", sourcePath);
+							}catch (Exception  e) {
+								sourcePath = File.createTempFile("temp-file-name", ".png"); 
+								BufferedImage image = new Robot().createScreenCapture(new Rectangle(Toolkit.getDefaultToolkit().getScreenSize()));
+								ImageIO.write(image, "png", sourcePath);
+							}
+						}
+
+						// Building up the destination path for the screenshot to save
+						// Also make sure to create a folder 'screenshots' with in the cucumber-report
+						// folder
+						/*File destinationPath = new File(System.getProperty("user.dir")
+								+ "/target/cucumber-reports/screenshots/" + screenshotName + ".png");*/
+
+						//Changed the path above since the snapshots are not available when run from CI pipeline
+						
+						File destinationPath = new File(System.getProperty("user.dir")
+								+ "/output/screenshots/" + screenshotName + ".png");
+
+						// Copy taken screenshot from source location to destination location
+						FileUtils.copyFile(sourcePath, destinationPath);
+
+						System.out.println(destinationPath.getCanonicalFile());
+						
+						// This attach the specified screenshot to the test
+						//Reporter.addScreenCaptureFromPath(destinationPath.toString());
+						
+						Reporter.addScreenCaptureFromPath(".\\"+ destinationPath.toString().substring(destinationPath.toString().indexOf("screenshots")));
+						
+
+					}
+				} catch (IOException e) {
+				}
+			}
+		} catch (Exception e) {
+			System.out.println(e.getMessage());
+		}
+	}
