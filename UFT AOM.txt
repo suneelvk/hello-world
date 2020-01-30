@@ -1,0 +1,373 @@
+
+' ---------------------------------------------------------------------------------
+'	PadLeft - This function returns a string of length 'totalDigits'  after  padding 'n' with '0' from left side
+' 	Parameters:
+'   	n - Integer 
+'		totalDigits - Expected no of digits in the Integer 
+' 	Returns 
+' 		Expected no of digits for the Integer by pading '0' from the left side
+' ---------------------------------------------------------------------------------
+Function PadLeft(n, totalDigits) 
+    if totalDigits > len(n) then 
+        PadLeft = String(totalDigits-len(n),"0") & n 
+    else 
+        PadLeft = n 
+    end if 
+End Function 
+
+' ---------------------------------------------------------------------------------
+'  CloseAllIEBrowsers - Close All IE Browsers
+'  Parameters:
+'   None
+'
+'  Returns:
+'  	None.
+'-------------------------------------------------------------------------------
+Public Function CloseAllIEBrowsers()
+	Dim oWMIService, ProcColl
+' 	This technique shuts down the processes (as seen in the Task Manager) instead of 
+' 	closing the actual window using its handle. Close all IE Browsers using WMI:
+
+	Wscript.sleep(2000)	
+	strSQL = "Select * From Win32_Process Where Name = 'iexplore.exe'"
+	
+	Set oWMIService = GetObject("winmgmts:\\.\root\cimv2")
+	Set ProcColl = oWMIService.ExecQuery(strSQL)
+	
+	For Each oElem in ProcColl
+		oElem.Terminate
+		Exit For
+	Next
+
+	Set ProcColl = Nothing
+	Set oWMIService = Nothing
+	CloseAllIEBrowsers = True
+
+End Function
+
+' ---------------------------------------------------------------------------------
+'  MakeDir - Make Directories for a path sent as argument
+'  Parameters:
+'    strPath - Path For which directories is to be created.
+'
+'  Returns:
+'   A Boolean whether a folder exists or not.
+'-------------------------------------------------------------------------------
+Function MakeDir (strPath)
+	Dim strParentPath, objFSO
+
+	Set objFSO = CreateObject("Scripting.FileSystemObject")
+	On Error Resume Next
+	strParentPath = objFSO.GetParentFolderName(strPath)
+
+	If Not objFSO.FolderExists(strParentPath) Then MakeDir strParentPath
+
+	If Not objFSO.FolderExists(strPath) Then objFSO.CreateFolder strPath
+	On Error Goto 0 
+	MakeDir = objFSO.FolderExists(strPath)
+End Function
+
+' ---------------------------------------------------------------------------------
+'  WriteFileText - Used to write an item to a file in a folder.
+'  Parameters:
+'    sFile - The file to Write To
+'    sText  - Text to Write
+'
+'  Returns:
+'   A string containing the content of the file.
+'-------------------------------------------------------------------------------
+Function WriteFileText(sFilePath, sText)
+    Dim objFSO 'As FileSystemObject
+    Dim objTextFile 'As Object
+    
+    Const ForReading = 1
+    Const ForWriting = 2
+    Const ForAppending = 8
+    
+    Set objFSO = CreateObject("Scripting.FileSystemObject")
+    Set objTextFile = objFSO.CreateTextFile(sFilePath, True)
+    
+'   Write a line.
+    objTextFile.Write (sText)
+
+    objTextFile.Close
+
+End Function
+
+'-------------------------- Variable Declaration ------------------------
+Dim qtApp 'As QuickTest.Application ' Declare the Application object variable 
+Dim qtTest 'As QuickTest.Test ' Declare a Test object variable
+Dim qtResultsOpt 'As QuickTest.RunResultsOptions ' Declare a Run Results Options object variable
+
+Dim pDefColl 'As QuickTest.ParameterDefinitions ' Declare a Parameter  Definitions collection 
+Dim pDef ' As QuickTest.ParameterDefinition ' Declare a ParameterDefinition  object 
+Dim rtParams 'As QuickTest.Parameters ' Declare a Parameters collection 
+'changed
+Dim rtParamItemID ' As QuickTest.Parameter ' Declare a Parameter object  
+Dim rtParamDataSheet ' As QuickTest.Parameter ' Declare a Parameter object
+Dim rtParamSnapPath ' As QuickTest.Parameter ' Declare a Parameter object 
+Dim rtParamTakeSnap4Pass ' As QuickTest.Parameter ' Declare a Parameter object  
+'changed 
+Dim rtParamReturnID ' As QuickTest.Parameter ' Declare a Parameter object  
+Dim rtParamInvAdjQty ' As QuickTest.Parameter ' Declare a Parameter object 
+Dim rtParamInvAdjAction  ' As QuickTest.Parameter ' Declare a Parameter object 
+Dim rtParamExecScrPart  ' As QuickTest.Parameter ' Declare a Parameter object
+Dim rtParamLineItemDet	' As QuickTest.Parameter ' Declare a Parameter object
+'changed
+
+Dim tfolder, tname, tfile, sTestName, sResultPath, objShell, objEnv, oFileSysObj
+Dim colNamedArguments, iNumberOfArguments, cnt, Indx 'As Integer 
+Dim sParamTestName, sParamSeleniumDataSheet, sParamOrderID, sParamItemID
+Dim sParamSnapPath, sParamInvAdjQty, sParamInvAdjAction, sParamExecScrPart, sParamOrderAmt
+Dim sParamTakeSnap4Pass, sParamReturnID
+'changed
+Dim sParamLineItemDetails, sTestExecuted  
+Dim sErrorTextFile, sProjectRoot, sErrorSnapUtilClassPath, sErrorSnapUtilClassName
+Dim sDate, sTime 
+
+Const TemporaryFolder = 2 
+Const Timeout = 5000    'in milliseconds
+'----------------------------------------------------------------------------
+
+'------------------------------------------------------------
+'Retrieve Command Line Named Arguments
+'------------------------------------------------------------
+iNumberOfArguments = WScript.Arguments.Count
+Set colNamedArguments = WScript.Arguments.Named
+
+sParamTestName = colNamedArguments.Item("QTPTestName")
+
+'msgbox sParamTestName
+
+If colNamedArguments.Exists("SeleniumDataSheet") Then
+	sParamSeleniumDataSheet = colNamedArguments.Item("SeleniumDataSheet")
+Else
+	sParamSeleniumDataSheet = "-NA-"
+End If
+
+
+
+
+'Changed
+
+If colNamedArguments.Exists("SnapPath") Then
+	sParamSnapPath = colNamedArguments.Item("SnapPath") 
+Else
+	sParamSnapPath = "-NA-" 	
+End If
+If colNamedArguments.Exists("TakeSnap4Pass") Then
+	sParamTakeSnap4Pass = colNamedArguments.Item("TakeSnap4Pass")
+Else
+	sParamTakeSnap4Pass =  "-NA-" 
+End If
+'Changed
+'------------------------------------------------------------
+'msgbox 	sParamSnapPath
+'------------------------------------------------------------
+'Set QuickTest IDE Options
+'------------------------------------------------------------
+On Error Resume Next
+Set qtApp = CreateObject("QuickTest.Application") ' Create the Application object
+
+'**************** Handle Probable Error Reason - LICENSE ERROR ********
+If Err.Number <> 0 Then
+	Err.Clear
+	sErrorTextFile = sParamSnapPath & "\QTP_ErrorMessage.txt"
+	Call MakeDir(sParamSnapPath)
+	Call WriteFileText(sErrorTextFile, "QTP License Error / " & Err.Description)
+	Wscript.Quit(1)
+Else
+	On Error GoTo 0	
+End If
+'**********************************************************************
+If qtApp.Launched = False Then
+	bAddinsLoaded = qtApp.SetActiveAddins(Array("Web","ActiveX","Java","Oracle"), sErrorDescription)
+End If
+
+qtApp.Launch ' Start QuickTest 
+qtApp.Visible = True ' Make the QuickTest application visible 
+qtApp.ActivateView "ExpertView" ' Display the Expert View
+
+qtApp.WindowState = "Maximized" 
+qtApp.Options.Run.ViewResults = False
+
+' Set QuickTest run options
+qtApp.Options.Run.ImageCaptureForTestResults = "OnError"
+
+qtApp.Open sParamTestName , True 
+
+
+
+'************** Error SnapShot Settings **************
+sProjectRoot = qtApp.Folders.Locate("..\..\..\..\")
+'msgbox sProjectRoot
+sErrorSnapUtilClassPath = sProjectRoot & "src "
+sErrorSnapUtilClassName = "screenShotUtility.ScreenCapturer "
+sRunSnapUtilCommand = "cmd /K CD C:\ & java -classpath " & sErrorSnapUtilClassPath & sErrorSnapUtilClassName &  sParamSnapPath
+'sRunSnapUtilCommand = ""&"java -classpath " & sErrorSnapUtilClassPath & sErrorSnapUtilClassName &  sParamSnapPath 
+'*****************************************************
+
+qtApp.Folders.RemoveAll
+'Changed
+
+
+Set qtTest = qtApp.Test
+qtTest.Settings.Run.OnError = "Stop"
+qtTest.Settings.Run.IterationMode = "rngIterations"
+qtTest.Settings.Run.StartIteration = 1
+qtTest.Settings.Run.EndIteration = 1
+'Changed
+
+
+
+
+
+
+qtTest.Close 
+Wscript.sleep Timeout
+qtApp.Open sParamTestName 
+
+'*********** Reset 'When Error Occurs' Test Setting *********
+Set qtTest = qtApp.Test
+qtTest.Settings.Run.OnError = "Stop"
+'qtTest.Settings.Run.IterationMode = "rngIterations"
+'qtTest.Settings.Run.StartIteration = 1
+'qtTest.Settings.Run.EndIteration = 1
+'************************************************************
+'------------------------------------------------------------
+
+'------------------------------------------------------------
+'Retrieve the parameters collection defined for the test. 
+'------------------------------------------------------------
+Set pDefColl = qtApp.Test.ParameterDefinitions 
+
+'cnt = pDefColl.Count 
+'Indx = 1 
+
+' Display the names and values of each of the parameters in the collection. 
+'While Indx <= cnt 
+'    Set pDef = pDefColl.Item(Indx) 
+'    MsgBox "Param name: " & pDef.Name & "; Type: " & pDef.Type & "; InOut: "& pDef.InOut & "; Description: " _ 
+'        & pDef.Description & "Default value: " & pDef.DefaultValue 
+'    Indx = Indx + 1 
+'Wend 
+'------------------------------------------------------------
+
+'------------------------------------------------------------
+'Retrieve a specific parameter and Assign the parameter value.
+'------------------------------------------------------------
+
+'Retrieve the Parameters collection defined for the test. 
+Set rtParams = pDefColl.GetParameters() 
+
+
+If sParamSnapPath <> "-NA-" Then
+	Set rtParamSnapPath = rtParams.Item("In_SnapPath")
+	rtParamSnapPath.Value = sParamSnapPath 
+End If
+
+If sParamTakeSnap4Pass <> "-NA-" Then
+	Set rtParamTakeSnap4Pass = rtParams.Item("In_TakeSnap4Pass")
+	rtParamTakeSnap4Pass.Value = sParamTakeSnap4Pass 
+End If
+
+
+'------------------------------------------------------------
+
+Set oFileSysObj = CreateObject("Scripting.FileSystemObject")
+'Set tfolder = oFileSysObj.GetSpecialFolder(TemporaryFolder)
+
+'-------------
+'Create the Run Results Options object
+'-------------
+Set qtResultsOpt = CreateObject("QuickTest.RunResultsOptions") 
+
+'Set the results location to be current user's 'Temp' Location[q:\Documents and Settings\LQ63\Local Settings\Temp]
+'qtResultsOpt.ResultsLocation = "<TempLocation>"
+
+'--------
+'------------------------------------------------------------
+'Delete QTP Results Folder Before QTP Launch, 
+'[otherwise 'Permission Denied' Error will pop]
+'------------------------------------------------------------
+'Set Log Path To %SystemDrive%\QTPResults\%TestName%
+Set objShell = CreateObject("WScript.Shell") 
+Set objEnv = objShell.Environment("PROCESS") 
+	
+sTestName = Mid(sParamTestName, (InstrRev(sParamTestName, "\") + 1))
+
+'******************** Append Date & Time Stamp For QTP Test Name ******
+sDate = Year(now) & PadLeft(Month(now),2) & PadLeft(Day(now),2)
+sTime = PadLeft(Hour(now),2) & PadLeft(Minute(now),2) & PadLeft(Second(now),2)
+sTestName = sTestName & "_" & sDate & "_" & sTime
+'**********************************************************************
+
+sResultPath = objEnv("systemdrive") & "\QTPResults\" & sTestName
+
+If(oFileSysObj.FolderExists(sResultPath))Then
+'	NOTE: In Case Of 'Permission Denied' Error, Stop TestRun, Restart QTP & Rexecute Test
+	Call oFileSysObj.DeleteFolder(sResultPath,True)
+End If
+'------------------------------------------------------------
+'--------
+
+qtResultsOpt.ResultsLocation = sResultPath
+
+'Run the test with changed parameters, [ResultsOptions], [WaitOnReturn], [Parameters]. 
+qtApp.Test.Run qtResultsOpt, True, rtParams
+
+
+'MsgBox qtTest.LastRunResults.Status ' Check the results of the test run
+
+' Display the value of an output  parameter after the test runs.
+sTestExecuted = rtParams.Item("Out_TestExecuted").Value
+
+'****************************************************************************
+'Trigger Recovery Operations After Test Run[Take Snapshot, Close IE Browsers]
+'****************************************************************************
+'msgbox sTestExecuted
+'msgbox Err.Number
+'msgbox sRunSnapUtilCommand
+
+'msgbox  sTestExecuted
+WScript.Stdout.Write sTestExecuted
+WScript.Echo sTestExecuted
+
+If sTestExecuted = "FALSE" OR  Err.Number <> 0 Then
+	Err.Clear
+	
+	qtApp.WindowState = "Minimized"
+	'Wscript.sleep Timeout *2
+    'msgbox sRunSnapUtilCommand
+'	Take Snapshot	---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	'objShell.Run sRunSnapUtilCommand, 0, False
+	
+	'objShell.Run  "cmd /K CD C:\ & java -classpath C:\AutomationTests\src screenShotUtility.ScreenCapturer C:\ScreenShots", 0,FALSE
+'-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+'msgbox a
+'	Close All IE Browsers
+	Call CloseAllIEBrowsers
+Else
+	On Error GoTo 0	
+End If
+'*****************************************************************************
+ 
+'-------------
+'Close the QTP
+'-------------
+qtTest.Close
+Wscript.sleep Timeout 
+qtApp.WindowState = "Minimized"
+
+'qtApp.Quit
+
+Set oFileSysObj = Nothing
+Set qtResultsOpt = Nothing ' Release the Run Results Options object
+Set qtTest = Nothing ' Release the Test object
+Set qtApp = Nothing ' Release the Application object
+
+If(sTestExecuted = "TRUE")Then
+	Wscript.Quit(0)	
+Else
+	Wscript.Quit(1)
+End If

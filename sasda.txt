@@ -1,0 +1,56 @@
+maven goals
+clean deploy
+
+Robocopy Usage:
+
+robocopy "\\suneel.com\Common\sun" "C:\Users\V.Sun\Downloads\sunee"
+
+Base64 conversion of string using powershell . Save as .ps:
+$EncodedText = “fdfgdfujvviq”
+#$DecodedText = [System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String($EncodedText))
+$DecodedText = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f $user,$EncodedText)))  
+$DecodedText
+
+Open a Browser can be used as a .bat file
+start /max iexplore.exe https://www.google.com
+
+Kill Drivers as a bat file
+taskkill /F /IM chromedriver.exe
+taskkill /F /IM MicrosoftWebDriver.exe
+
+
+
+{
+  "capabilities": [
+    {
+      "browserName": "MicrosoftEdge",
+	  "version" : "16.16299",
+      "platform": "WIN10",
+      "maxInstances": 1
+    },
+    {
+      "browserName": "firefox",
+      "platform": "WIN10",
+      "maxInstances": 5
+    },
+    {
+      "browserName": "chrome",
+      "version" : "79.0.3945.88",
+      "platform": "WIN10",
+      "maxInstances": 5
+    },
+    {
+      "browserName": "internet explorer",
+	  "version" : "11.1451.16299.0",
+      "platform": "WIN10",
+      "maxInstances": 1
+    }
+  ],
+  "hub": " http://ip:4444"
+}
+
+
+
+C:
+cd C:\Users\V.Kalluru\Downloads
+java -Dwebdriver.chrome.driver=C:\Users\V.Kalluru\Downloads\drivers\chromedriver.exe -Dwebdriver.ie.driver=C:\Users\V.Kalluru\Downloads\drivers\IEDriverServer.exe -Dwebdriver.edge.driver=C:\Users\V.Kalluru\Downloads\drivers\MicrosoftWebDriver_ver_16_16299.exe -Dwebdriver.gecko.driver=C:\Users\V.Kalluru\Downloads\drivers\geckodriver.exe -jar selenium-server-standalone-3.141.59.jar -role node -hub  http://10.39.71.200:4444/grid/register/ -port 5556 -nodeConfig C:\Users\V.Kalluru\Desktop\Batchfiles\browserConfig.json
